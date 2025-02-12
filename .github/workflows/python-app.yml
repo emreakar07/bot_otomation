@@ -71,7 +71,7 @@ jobs:
 
     - name: Create artifact of data
       if: always()
-      uses: actions/upload-artifact@v3  # v2'den v3'e güncellendi
+      uses: actions/upload-artifact@v4  # v3'ten v4'e güncellendi
       with:
         name: scraped-data
         path: Data/
