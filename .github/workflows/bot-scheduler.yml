@@ -1,0 +1,78 @@
+name: Weekly Bot Runner
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Her Pazar gece yarısı
+  workflow_dispatch:      # Manuel çalıştırma butonu için
+
+jobs:
+  run-bots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 saat timeout limiti
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Create Data directory
+      run: mkdir -p Data
+
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.10'
+
+    - name: Install Chrome and dependencies
+      run: |
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/sources.list.d/google.list'
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install selenium webdriver_manager firebase-admin
+
+    - name: Setup Firebase credentials
+      run: |
+        echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' | jq '.' > serviceAccountKey.json
+        echo '${{ secrets.MEVDUAT_SERVICE_ACCOUNT }}' | jq '.' > mevduatServiceAccountKey.json
+        echo '${{ secrets.MEVDUAT2_SERVICE_ACCOUNT }}' | jq '.' > mevduat2serviceAccountKey.json
+
+    - name: Run bots with retry
+      run: |
+        cd Bots
+        for bot in ihtiyac_kredisi_bot.py kobi_bot.py konut_kredisi_bot.py tasit_kredisi_bot.py mevduat_bot.py; do
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Running $bot (Attempt $attempt of $max_attempts)"
+            if python $bot; then
+              break
+            else
+              echo "Failed to run $bot"
+              if [ $attempt -eq $max_attempts ]; then
+                echo "All attempts failed for $bot"
+                exit 1
+              fi
+              attempt=$((attempt + 1))
+              sleep 60
+            fi
+          done
+        done
+        cd ..
+
+    - name: Split mevduat data
+      run: python split_mevduat.py
+
+    - name: Upload to Firebase
+      run: python db_setup.py
+
+    - name: Create artifact of data
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: scraped-data
+        path: Data/
+        retention-days: 7 

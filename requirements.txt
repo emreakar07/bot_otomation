@@ -1,0 +1,6 @@
+firebase-admin
+selenium
+webdriver_manager
+requests
+beautifulsoup4
+chromedriver-autoinstaller 
