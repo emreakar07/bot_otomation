@@ -12,13 +12,13 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Create Data directory
       run: mkdir -p Data
 
     - name: Setup Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -71,7 +71,7 @@ jobs:
 
     - name: Create artifact of data
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3  # v2'den v3'e güncellendi
       with:
         name: scraped-data
         path: Data/
