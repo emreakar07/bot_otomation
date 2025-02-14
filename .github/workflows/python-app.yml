@@ -12,23 +12,21 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Create Data directory
       run: mkdir -p Data
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+        cache: 'pip'
 
-    - name: Install Chrome and dependencies
-      run: |
-        sudo mkdir -p /etc/apt/keyrings
-        curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
-        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-        sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
+    - name: Install Chrome
+      uses: browser-actions/setup-chrome@latest
+      with:
+        chrome-version: stable
         
     - name: Install Python dependencies
       run: |
@@ -37,9 +35,9 @@ jobs:
 
     - name: Setup Firebase credentials
       run: |
-        echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' | jq '.' > serviceAccountKey.json
-        echo '${{ secrets.MEVDUAT_SERVICE_ACCOUNT }}' | jq '.' > mevduatServiceAccountKey.json
-        echo '${{ secrets.MEVDUAT2_SERVICE_ACCOUNT }}' | jq '.' > mevduat2serviceAccountKey.json
+        echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > serviceAccountKey.json
+        echo "${{ secrets.MEVDUAT_SERVICE_ACCOUNT }}" > mevduatServiceAccountKey.json
+        echo "${{ secrets.MEVDUAT2_SERVICE_ACCOUNT }}" > mevduat2serviceAccountKey.json
 
     - name: Run bots with retry
       run: |
@@ -50,6 +48,7 @@ jobs:
           while [ $attempt -le $max_attempts ]; do
             echo "Running $bot (Attempt $attempt of $max_attempts)"
             if python $bot; then
+              echo "Successfully completed $bot"
               break
             else
               echo "Failed to run $bot"
@@ -58,6 +57,7 @@ jobs:
                 exit 1
               fi
               attempt=$((attempt + 1))
+              echo "Waiting 60 seconds before retry..."
               sleep 60
             fi
           done
@@ -72,8 +72,15 @@ jobs:
 
     - name: Create artifact of data
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: scraped-data
         path: Data/
         retention-days: 7
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f serviceAccountKey.json
+        rm -f mevduatServiceAccountKey.json
+        rm -f mevduat2serviceAccountKey.json 
