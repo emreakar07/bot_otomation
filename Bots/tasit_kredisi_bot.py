@@ -7,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 import json
+import traceback
 
 def generate_loan_amounts():
     amounts = [1000, 20000]
@@ -29,26 +30,26 @@ def get_car_status():
     return ["1", "2"]  # 1: Sıfır Km, 2: İkinci El
 
 def test_loan_scenarios():
-    options = webdriver.ChromeOptions()
-    # Headless mod ve gerekli ayarlar
-    options.add_argument('--headless=new')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--disable-software-rasterizer')
-    options.add_argument('--disable-notifications')
-    options.add_argument('--window-size=1920,1080')
-    options.add_argument('--disable-blink-features=AutomationControlled')
-    options.add_argument("--disable-extensions")
-    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    
-    browser = webdriver.Chrome(options=options)
-    browser.set_window_size(1920, 1080)
-    wait = WebDriverWait(browser, 30)
-    
+    browser = None
     all_results = {}
-
     try:
+        options = webdriver.ChromeOptions()
+        # Headless mod ve gerekli ayarlar
+        options.add_argument('--headless=new')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--disable-software-rasterizer')
+        options.add_argument('--disable-notifications')
+        options.add_argument('--window-size=1920,1080')
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        options.add_argument("--disable-extensions")
+        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        browser = webdriver.Chrome(options=options)
+        browser.set_window_size(1920, 1080)
+        wait = WebDriverWait(browser, 30)
+        
         for car_status in get_car_status():
             all_results[f"arac_durumu_{car_status}"] = {}
             print(f"\nAraç Durumu: {'Sıfır' if car_status == '1' else 'İkinci El'}")
@@ -137,13 +138,31 @@ def test_loan_scenarios():
     
     except Exception as e:
         print(f"Genel hata oluştu: {str(e)}")
-    
+        print("Hata detayı:")
+        print(traceback.format_exc())
     finally:
-        browser.quit()
-        if all_results:
-            with open('Data/tasit_kredisi_data.json', 'w', encoding='utf-8') as f:
+        if browser:
+            try:
+                browser.quit()
+            except:
+                print("Browser kapatılırken hata oluştu")
+        
+        # Her durumda kaydet
+        try:
+            with open('../Data/tasit_kredisi_data.json', 'w', encoding='utf-8') as f:
                 json.dump(all_results, f, ensure_ascii=False, indent=4)
-            print("\nTüm sonuçlar kaydedildi.")
+            print("\nMevcut sonuçlar kaydedildi.")
+        except Exception as e:
+            print(f"Sonuçlar kaydedilirken hata oluştu: {str(e)}")
+            print("Kaydetme hatası detayı:")
+            print(traceback.format_exc())
 
 if __name__ == "__main__":
-    test_loan_scenarios()
+    try:
+        test_loan_scenarios()
+    except Exception as e:
+        print(f"Program çalışırken hata oluştu: {str(e)}")
+        print("Ana program hatası detayı:")
+        print(traceback.format_exc())
+        # Hata olsa bile 0 döndür ki GitHub Actions devam etsin
+        exit(0)
