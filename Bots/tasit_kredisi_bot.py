@@ -30,40 +30,32 @@ def get_car_status():
 
 def test_loan_scenarios():
     options = webdriver.ChromeOptions()
-    # Headless mod ayarları
-    options.add_argument('--headless')
+    # Headless mod ve gerekli ayarlar
+    options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
-    # Diğer ayarlar
-    options.add_argument('--ignore-ssl-errors=yes')
-    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--disable-software-rasterizer')
     options.add_argument('--disable-notifications')
     options.add_argument('--window-size=1920,1080')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_argument("--disable-extensions")
+    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     
     browser = webdriver.Chrome(options=options)
     browser.set_window_size(1920, 1080)
-    wait = WebDriverWait(browser, 10)
+    wait = WebDriverWait(browser, 30)
     
-    def try_get_url(url, max_retries=2):
-        for _ in range(max_retries):
-            try:
-                browser.get(url)
-                time.sleep(2)  # İhtiyaç kredisi botundaki gibi 2 saniye bekle
-                return True
-            except:
-                print("Sayfa yüklenemedi, tekrar deneniyor...")
-                time.sleep(2)
-                continue
-        return False
-
     all_results = {}
-    first_iteration = True
 
     try:
         for car_status in get_car_status():
             all_results[f"arac_durumu_{car_status}"] = {}
             print(f"\nAraç Durumu: {'Sıfır' if car_status == '1' else 'İkinci El'}")
+
+            # Ana sayfaya git ve form doldur
+            browser.get("https://www.hangikredi.com/kredi/tasit-kredisi")
+            time.sleep(2)
 
             for loan_amount in generate_loan_amounts():
                 amount_results = {}
@@ -73,40 +65,51 @@ def test_loan_scenarios():
                     print(f"\nVade: {month} ay")
                     
                     try:
-                        url = f"https://www.hangikredi.com/kredi/tasit-kredisi/sorgulama?amount={loan_amount}&maturity={month}&CarStatus={car_status}"
-                        if not try_get_url(url):
-                            print("Sayfa yüklenemedi, sonraki kombinasyona geçiliyor...")
-                            continue
+                        # Form doldurma
+                        set_amount_js = f"""
+                            var input = document.getElementById('amount');
+                            var setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                            setValue.call(input, '{loan_amount}');
+                            var event = new Event('input', {{ bubbles: true }});
+                            input.dispatchEvent(event);
+                        """
+                        browser.execute_script(set_amount_js)
                         
-                        if first_iteration:
-                            try:
-                                # Pop-up'ı bul ve kapat
-                                popup_close = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".modal-close-button")))
-                                popup_close.click()
-                            except:
-                                print("Pop-up bulunamadı veya zaten kapalı.")
-                            first_iteration = False
-
-                        # Scroll to load all content
-                        browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(1)  # Wait for content to load
+                        # Vade seçimi
+                        vade_select = wait.until(
+                            EC.presence_of_element_located((By.ID, "maturity"))
+                        )
+                        select = Select(vade_select)
+                        select.select_by_value(str(month))
                         
-                        bank_cards = browser.find_elements(By.CLASS_NAME, "product-card__container")
+                        # Araç durumu seçimi
+                        car_status_select = wait.until(
+                            EC.presence_of_element_located((By.ID, "CarStatus"))
+                        )
+                        select = Select(car_status_select)
+                        select.select_by_value(car_status)
+                        
+                        # Hesapla butonuna tıkla
+                        browser.execute_script("""
+                            var button = document.querySelector('button[data-testid="submit"]');
+                            button.click();
+                        """)
+                        
+                        time.sleep(3)
+                        
+                        # Banka kartlarının yüklenmesini bekle
+                        bank_cards = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "product-card__container")))
                         print(f"Bulunan banka sayısı: {len(bank_cards)}")
                         
                         month_results = []
                         
                         for card in bank_cards:
                             try:
-                                # Scroll element into view before interacting
-                                browser.execute_script("arguments[0].scrollIntoView(true);", card)
-                                time.sleep(0.5)  # Small delay after scroll
-                                
                                 bank_data = {
-                                    "banka": card.find_element(By.CSS_SELECTOR, "[data-testid='bankImage']").get_attribute("alt"),
-                                    "faiz_orani": card.find_element(By.CSS_SELECTOR, "[data-testid='rate']").text.replace('%', '').strip(),
-                                    "aylik_taksit": card.find_element(By.CSS_SELECTOR, "[data-testid='monthlyInstallment']").text,
-                                    "toplam_odeme": card.find_element(By.CSS_SELECTOR, "[data-testid='totalAmount']").text
+                                    "banka": card.find_element(By.CSS_SELECTOR, ".product-list-card_bank_name__6epoY[data-testid='bank-name']").text,
+                                    "faiz_orani": card.find_element(By.CSS_SELECTOR, ".product-list-card_info__Na8Zr").text.replace('%', '').strip(),
+                                    "aylik_taksit": card.find_element(By.CSS_SELECTOR, ".product-list-card_info__Na8Zr.product-list-card_info__emphatic__hrdln").text,
+                                    "toplam_odeme": card.find_element(By.CSS_SELECTOR, ".product-list-card_info__Na8Zr[data-testid='totalAmount']").text
                                 }
                                 month_results.append(bank_data)
                                 print(f"Banka: {bank_data['banka']}, Faiz Oranı: {bank_data['faiz_orani']}, "
@@ -116,10 +119,16 @@ def test_loan_scenarios():
                                 print(f"Banka verisi alınırken hata: {str(e)}")
                                 continue
                         
-                        amount_results[f"vade_{month}"] = month_results
+                        if month_results:  # Sadece sonuç varsa kaydet
+                            amount_results[f"vade_{month}"] = month_results
+                            
+                        # Ana sayfaya geri dön
+                        browser.get("https://www.hangikredi.com/kredi/tasit-kredisi")
+                        time.sleep(2)
                         
                     except Exception as e:
                         print(f"Bu kombinasyon atlanıyor: {str(e)}")
+                        browser.get("https://www.hangikredi.com/kredi/tasit-kredisi")
                         time.sleep(2)
                         continue
                 

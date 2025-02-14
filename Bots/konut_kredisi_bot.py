@@ -42,16 +42,17 @@ def get_available_months():
 
 def test_loan_scenarios():
     options = webdriver.ChromeOptions()
-    # Headless mod ayarları
-    options.add_argument('--headless')
+    # Headless mod ve gerekli ayarlar
+    options.add_argument('--headless=new')  # Yeni headless modu
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
-    # Diğer ayarlar
-    options.add_argument('--ignore-ssl-errors=yes')
-    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--disable-software-rasterizer')
     options.add_argument('--disable-notifications')
     options.add_argument('--window-size=1920,1080')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_argument("--disable-extensions")
+    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     
     browser = webdriver.Chrome(options=options)
     browser.set_window_size(1920, 1080)
@@ -63,8 +64,6 @@ def test_loan_scenarios():
         browser.get("https://www.hangikredi.com/kredi/konut-kredisi")
         time.sleep(2)
         
-        input("Pop-up'ı manuel olarak kapatın ve Enter'a basın...")
-
         for loan_amount in generate_loan_amounts():
             all_results[str(loan_amount)] = {}
             print(f"\nKredi Tutarı: {loan_amount:,} TL")
@@ -113,7 +112,7 @@ def test_loan_scenarios():
                             "banka": bank_name,
                             "alt_bilgi": card.find_element(By.CSS_SELECTOR, "[data-testid='content']").text,
                             "oran_turu": card.find_element(By.CSS_SELECTOR, ".product-list-card_info_title__XF_Pm.order-1").text,
-                            "faiz_orani": card.find_element(By.CSS_SELECTOR, "[data-testid='interestedRate']").text.replace('%', '')
+                            "faiz_orani": card.find_element(By.CSS_SELECTOR, ".product-list-card_info__Na8Zr.order-2.md\\:order-3").text.replace('%', '').strip()
                         }
                         month_results.append(bank_data)
                         print(f"Banka: {bank_data['banka']}, {bank_data['oran_turu']}: {bank_data['faiz_orani']}")
