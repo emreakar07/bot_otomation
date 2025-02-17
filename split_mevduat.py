@@ -1,11 +1,19 @@
 import json
 import os
 
+def get_data_path():
+    # Proje kök dizinini al
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(base_dir, 'Data')
+    # Data dizininin varlığını kontrol et
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    return data_dir
+
 def split_mevduat_data():
     try:
         # Data klasörü yolunu al
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.join(current_dir, "Data")
+        data_dir = get_data_path()
         
         # Kaynak dosya yolu
         mevduat_path = os.path.join(data_dir, "mevduat.json")

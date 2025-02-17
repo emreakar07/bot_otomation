@@ -6,6 +6,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import json
+import os
+
+def get_data_path():
+    # Bot dizininden bir üst dizine çık ve Data klasörüne gir
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(base_dir, 'Data')
+    # Data dizininin varlığını kontrol et
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    return data_dir
 
 def generate_loan_amounts():
     amounts = [1000]  
@@ -129,9 +139,10 @@ def test_loan_scenarios():
     
     finally:
         browser.quit()
-        with open('Data/konut_kredisi_data.json', 'w', encoding='utf-8') as f:
+        output_file = os.path.join(get_data_path(), 'konut_kredisi_data.json')
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(all_results, f, ensure_ascii=False, indent=4)
-        print("\nTüm sonuçlar kaydedildi.")
+        print(f"\nTüm sonuçlar kaydedildi: {output_file}")
 
 if __name__ == "__main__":
     test_loan_scenarios()

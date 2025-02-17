@@ -9,6 +9,7 @@ import json
 import signal
 import sys
 from datetime import datetime
+import os
 
 # Global variables
 results = {}
@@ -280,11 +281,21 @@ def scrape_deposit_rates_parallel(max_workers=5):
     finally:
         save_results()
 
+def get_data_path():
+    # Bot dizininden bir üst dizine çık ve Data klasörüne gir
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(base_dir, 'Data')
+    # Data dizininin varlığını kontrol et
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    return data_dir
+
 def save_results():
     try:
-        with open('Data/mevduat.json', 'w', encoding='utf-8') as f:
+        output_file = os.path.join(get_data_path(), 'mevduat.json')
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
-        print("\nVeriler kaydedildi: mevduat.json")
+        print(f"\nVeriler kaydedildi: {output_file}")
     except Exception as e:
         print(f"\nDosya kaydedilirken hata oluştu: {str(e)}")
 
