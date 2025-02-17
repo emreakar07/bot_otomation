@@ -239,7 +239,7 @@ def scrape_single_combination(params):
                 
             time.sleep(2)  # Add delay between retries
 
-def scrape_deposit_rates_parallel(max_workers=5):
+def scrape_deposit_rates_parallel(max_workers=3):
     global results
     currencies = ['TL', 'USD', 'EUR']
     all_combinations = []
@@ -253,15 +253,20 @@ def scrape_deposit_rates_parallel(max_workers=5):
 
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_params = {executor.submit(scrape_single_combination, params): params for params in all_combinations}
+            future_to_params = {executor.submit(scrape_single_combination, params): params 
+                              for params in all_combinations}
+            
+            completed = 0
+            total = len(all_combinations)
             
             for future in future_to_params:
                 if not is_running:
+                    print("\nİşlem iptal edildi. Mevcut veriler kaydediliyor...")
                     executor.shutdown(wait=False)
                     break
                     
                 try:
-                    result = future.result()
+                    result = future.result(timeout=300)  # 5 dakika timeout
                     if result:
                         currency = result['currency']
                         amount = result['amount']
@@ -271,15 +276,21 @@ def scrape_deposit_rates_parallel(max_workers=5):
                             results[currency][str(amount)] = {}
                         
                         results[currency][str(amount)][f"vade_{day}"] = result['results']
-                        print(f"Tamamlandı: {currency}-{amount}-{day}")
+                        completed += 1
+                        print(f"İlerleme: {completed}/{total} - Tamamlandı: {currency}-{amount}-{day}")
                 except Exception as e:
                     print(f"İşlem hatası: {str(e)}")
+                
+                # Her 10 işlemde bir verileri kaydet
+                if completed % 10 == 0:
+                    save_results()
     
     except Exception as e:
         print(f"Genel hata: {str(e)}")
     
     finally:
         save_results()
+        print(f"\nToplam tamamlanan işlem: {completed}/{total}")
 
 def get_data_path():
     # Bot dizininden bir üst dizine çık ve Data klasörüne gir
@@ -293,16 +304,26 @@ def get_data_path():
 def save_results():
     try:
         output_file = os.path.join(get_data_path(), 'mevduat.json')
-        with open(output_file, 'w', encoding='utf-8') as f:
+        temp_file = output_file + '.tmp'
+        
+        # Önce geçici dosyaya yaz
+        with open(temp_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
+        
+        # Geçici dosya başarıyla yazıldıysa, asıl dosyaya taşı
+        os.replace(temp_file, output_file)
         print(f"\nVeriler kaydedildi: {output_file}")
     except Exception as e:
         print(f"\nDosya kaydedilirken hata oluştu: {str(e)}")
 
 if __name__ == "__main__":
     try:
-        scrape_deposit_rates_parallel(max_workers=5)
+        print("Mevduat bot başlatılıyor...")
+        print(f"Data dizini: {get_data_path()}")
+        scrape_deposit_rates_parallel(max_workers=3)
     except KeyboardInterrupt:
         print("\nProgram sonlandırılıyor...")
+    except Exception as e:
+        print(f"Beklenmeyen hata: {str(e)}")
     finally:
         save_results()

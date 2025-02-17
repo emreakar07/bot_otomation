@@ -75,11 +75,13 @@ jobs:
 
     - name: Run mevduat bot
       continue-on-error: true
-      timeout-minutes: 15
+      timeout-minutes: 25  # Süreyi 15'ten 25'e çıkaralım
       run: |
         cd Bots
         echo "Running mevduat_bot.py..."
-        python -u mevduat_bot.py || echo "Warning: Bot failed"
+        python -u mevduat_bot.py || echo "Warning: Bot failed with exit code $?"
+        echo "Checking if mevduat.json was created:"
+        ls -la ../Data/mevduat.json || echo "mevduat.json was not created"
         cd ..
 
     - name: Process data
@@ -88,6 +90,14 @@ jobs:
       run: |
         echo "Data directory contents before processing:"
         ls -la Data/
+        
+        # JSON dosyalarının içeriğini kontrol et
+        for file in Data/*.json; do
+          if [ -f "$file" ]; then
+            echo "Checking $file content:"
+            python -c "import json; f=open('$file'); json.load(f); f.close()" || echo "Invalid JSON in $file"
+          fi
+        done
         
         if [ -f "Data/mevduat.json" ]; then
           echo "Running split_mevduat.py..."
@@ -98,7 +108,7 @@ jobs:
         
         if [ -f "Data/ihtiyac_kredisi_data.json" ] || [ -f "Data/konut_kredisi_data.json" ] || [ -f "Data/kobi_kredisi_data.json" ]; then
           echo "Running db_setup.py..."
-          python db_setup.py
+          python -u db_setup.py
         else
           echo "Warning: No credit data files found, skipping db_setup"
         fi

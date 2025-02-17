@@ -4,69 +4,88 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 import os
 import time
+from datetime import datetime
 
 def format_kredi_data(data, kredi_turu):
     """Kredi verilerini Firebase formatına dönüştür"""
-    formatted_data = []
-    
-    if kredi_turu == "tasit":
-        for arac_durumu, amounts in data.items():
-            arac_tipi = "Sıfır Araç" if "1" in arac_durumu else "İkinci El Araç"
-            for amount, vades in amounts.items():
+    try:
+        # JSON verilerini doğrula
+        if not isinstance(data, dict):
+            print(f"Hata: Veri sözlük formatında değil. Veri tipi: {type(data)}")
+            return []
+
+        formatted_data = []
+        
+        if kredi_turu == "tasit":
+            for arac_durumu, amounts in data.items():
+                arac_tipi = "Sıfır Araç" if "1" in arac_durumu else "İkinci El Araç"
+                for amount, vades in amounts.items():
+                    for vade, banka_listesi in vades.items():
+                        for banka_data in banka_listesi:
+                            formatted_data.append({
+                                'arac_durumu': arac_tipi,
+                                'kredi_tutari': amount,
+                                'vade': vade.replace('vade_', ''),
+                                'banka': banka_data['banka'],
+                                'alt_bilgi': banka_data.get('alt_bilgi', ''),
+                                'oran_turu': banka_data.get('oran_turu', ''),
+                                'faiz_orani': banka_data.get('faiz_orani', '')
+                            })
+        
+        elif kredi_turu == "konut":
+            for amount, vades in data.items():
                 for vade, banka_listesi in vades.items():
                     for banka_data in banka_listesi:
                         formatted_data.append({
-                            'arac_durumu': arac_tipi,
                             'kredi_tutari': amount,
                             'vade': vade.replace('vade_', ''),
-                            'banka': banka_data['banka'],
+                            'banka': banka_data.get('banka', ''),
                             'alt_bilgi': banka_data.get('alt_bilgi', ''),
                             'oran_turu': banka_data.get('oran_turu', ''),
                             'faiz_orani': banka_data.get('faiz_orani', '')
                         })
-    
-    elif kredi_turu == "konut":
-        for amount, vades in data.items():
-            for vade, banka_listesi in vades.items():
-                for banka_data in banka_listesi:
-                    formatted_data.append({
-                        'kredi_tutari': amount,
-                        'vade': vade.replace('vade_', ''),
-                        'banka': banka_data.get('banka', ''),
-                        'alt_bilgi': banka_data.get('alt_bilgi', ''),
-                        'oran_turu': banka_data.get('oran_turu', ''),
-                        'faiz_orani': banka_data.get('faiz_orani', '')
-                    })
-    
-    elif kredi_turu == "ihtiyac":
-        for amount, vades in data.items():
-            kredi_tutari = amount.replace('amount_', '')
-            for vade, banka_listesi in vades.items():
-                vade_suresi = vade.replace('vade_', '')
-                for banka_data in banka_listesi:
-                    formatted_data.append({
-                        'kredi_tutari': kredi_tutari,
-                        'vade': vade_suresi,
-                        'banka': banka_data.get('banka', ''),
-                        'faiz_orani': banka_data.get('faiz_orani', '')
-                    })
-    
-    elif kredi_turu == "kobi":
-        for amount, vades in data.items():
-            for vade, banka_listesi in vades.items():
-                for banka_data in banka_listesi:
-                    formatted_data.append({
-                        'kredi_tutari': amount,
-                        'vade': vade.replace('vade_', ''),
-                        'banka': banka_data.get('banka', ''),
-                        'kredi_adi': banka_data.get('kredi_adi', ''),
-                        'faiz_orani': banka_data.get('faiz_orani', ''),
-                        'aylik_taksit': banka_data.get('aylik_taksit', ''),
-                        'toplam_odeme': banka_data.get('toplam_odeme', ''),
-                        'is_sponsored': banka_data.get('is_sponsored', False)
-                    })
-    
-    return formatted_data
+        
+        elif kredi_turu == "ihtiyac":
+            for amount, amount_data in data.items():
+                amount_value = amount.replace("amount_", "")
+                for vade, vade_data in amount_data.items():
+                    vade_value = vade.replace("vade_", "")
+                    for bank_data in vade_data:
+                        try:
+                            formatted_bank = {
+                                "kredi_turu": "İhtiyaç Kredisi",
+                                "kredi_tutari": float(amount_value),
+                                "vade": int(vade_value),
+                                "banka": bank_data["banka"],
+                                "faiz_orani": float(bank_data["faiz_orani"].replace(",", ".")),
+                                "aylik_taksit": bank_data["aylik_taksit"],
+                                "toplam_odeme": bank_data["toplam_odeme"],
+                                "tarih": datetime.now().strftime("%Y-%m-%d")
+                            }
+                            formatted_data.append(formatted_bank)
+                        except Exception as e:
+                            print(f"Banka verisi işlenirken hata: {str(e)}")
+                            continue
+        
+        elif kredi_turu == "kobi":
+            for amount, vades in data.items():
+                for vade, banka_listesi in vades.items():
+                    for banka_data in banka_listesi:
+                        formatted_data.append({
+                            'kredi_tutari': amount,
+                            'vade': vade.replace('vade_', ''),
+                            'banka': banka_data.get('banka', ''),
+                            'kredi_adi': banka_data.get('kredi_adi', ''),
+                            'faiz_orani': banka_data.get('faiz_orani', ''),
+                            'aylik_taksit': banka_data.get('aylik_taksit', ''),
+                            'toplam_odeme': banka_data.get('toplam_odeme', ''),
+                            'is_sponsored': banka_data.get('is_sponsored', False)
+                        })
+        
+        return formatted_data
+    except Exception as e:
+        print(f"format_kredi_data hatası: {str(e)}")
+        return []
 
 def format_mevduat_data(data):
     """Mevduat verilerini Firebase formatına dönüştür"""
