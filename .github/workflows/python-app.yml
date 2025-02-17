@@ -12,7 +12,7 @@ on:
 jobs:
   run-bots:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60  # Timeout süresini artıralım
 
     steps:
     - uses: actions/checkout@v4
@@ -46,26 +46,40 @@ jobs:
         echo "${{ secrets.MEVDUAT_SERVICE_ACCOUNT }}" > mevduatServiceAccountKey.json
         echo "${{ secrets.MEVDUAT2_SERVICE_ACCOUNT }}" > mevduat2serviceAccountKey.json
 
-    - name: Run bots
+    - name: Run ihtiyac kredisi bot
       continue-on-error: true
+      timeout-minutes: 15
       run: |
-        # Absolute paths for debugging
-        echo "Absolute path to Data directory: $PWD/Data"
-        echo "Absolute path to Bots directory: $PWD/Bots"
-        
         cd Bots
-        for bot in ihtiyac_kredisi_bot.py kobi_bot.py konut_kredisi_bot.py mevduat_bot.py; do
-          echo "----------------------------------------"
-          echo "Running $bot..."
-          python -u $bot
-          if [ $? -eq 0 ]; then
-            echo "Successfully completed $bot"
-          else
-            echo "Warning: $bot failed with exit code $?"
-          fi
-          echo "Data directory contents:"
-          ls -la ../Data/
-        done
+        echo "Running ihtiyac_kredisi_bot.py..."
+        python -u ihtiyac_kredisi_bot.py || echo "Warning: Bot failed"
+        cd ..
+
+    - name: Run konut kredisi bot
+      continue-on-error: true
+      timeout-minutes: 15
+      run: |
+        cd Bots
+        echo "Running konut_kredisi_bot.py..."
+        python -u konut_kredisi_bot.py || echo "Warning: Bot failed"
+        cd ..
+
+    - name: Run kobi kredisi bot
+      continue-on-error: true
+      timeout-minutes: 15
+      run: |
+        cd Bots
+        echo "Running kobi_bot.py..."
+        python -u kobi_bot.py || echo "Warning: Bot failed"
+        cd ..
+
+    - name: Run mevduat bot
+      continue-on-error: true
+      timeout-minutes: 15
+      run: |
+        cd Bots
+        echo "Running mevduat_bot.py..."
+        python -u mevduat_bot.py || echo "Warning: Bot failed"
         cd ..
 
     - name: Process data
@@ -82,8 +96,12 @@ jobs:
           echo "Warning: mevduat.json not found, skipping split"
         fi
         
-        echo "Running db_setup.py..."
-        python db_setup.py
+        if [ -f "Data/ihtiyac_kredisi_data.json" ] || [ -f "Data/konut_kredisi_data.json" ] || [ -f "Data/kobi_kredisi_data.json" ]; then
+          echo "Running db_setup.py..."
+          python db_setup.py
+        else
+          echo "Warning: No credit data files found, skipping db_setup"
+        fi
         
         echo "Final Data directory contents:"
         ls -la Data/
