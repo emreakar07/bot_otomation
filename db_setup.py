@@ -147,8 +147,7 @@ def upload_kredi_data():
         json_files = {
             "ihtiyac_kredisi_data.json": "ihtiyac_kredisi_bot",
             "kobi_kredisi_data.json": "kobi_kredisi_bot",
-            "konut_kredisi_data.json": "konut_kredisi_bot",
-            "tasit_kredisi_data.json": "tasit_kredisi_bot"
+            "konut_kredisi_data.json": "konut_kredisi_bot"
         }
 
         for json_file, kredi_turu in json_files.items():
@@ -225,14 +224,62 @@ def upload_mevduat_foreign_data():
 
 def main():
     """Ana fonksiyon"""
-    print("\n1. Kredi verileri yükleniyor...")
-    upload_kredi_data()
-    
-    print("\n2. TL mevduat verileri yükleniyor...")
-    upload_mevduat_tl_data()
-    
-    print("\n3. Döviz mevduat verileri yükleniyor...")
-    upload_mevduat_foreign_data()
+    try:
+        print("\n1. Kredi verileri yükleniyor...")
+        # Taşıt kredisi hariç diğer kredileri yükle
+        json_files = {
+            "ihtiyac_kredisi_data.json": "ihtiyac_kredisi_bot",
+            "kobi_kredisi_data.json": "kobi_kredisi_bot",
+            "konut_kredisi_data.json": "konut_kredisi_bot"
+        }
+        
+        # Firebase setup
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        key_path = os.path.join(current_dir, "serviceAccountKey.json")
+        cred = credentials.Certificate(key_path)
+        app = firebase_admin.initialize_app(cred, name='kredi')
+        db = firestore.client(app)
+
+        for json_file, kredi_turu in json_files.items():
+            collection_name = json_file.replace('.json', '')
+            file_path = os.path.join(current_dir, "Data", json_file)
+            
+            print(f"\nProcessing {json_file}...")
+            
+            try:
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                    formatted_data = format_kredi_data(data, kredi_turu)
+                    
+                    if formatted_data:
+                        # Koleksiyonu temizle
+                        print(f"Koleksiyon temizleniyor: {collection_name}...")
+                        docs = db.collection(collection_name).stream()
+                        batch = db.batch()
+                        deleted_count = 0
+                        for doc in docs:
+                            batch.delete(doc.reference)
+                            deleted_count += 1
+                            if deleted_count >= 100:
+                                batch.commit()
+                                batch = db.batch()
+                                deleted_count = 0
+                        if deleted_count > 0:
+                            batch.commit()
+                        
+                        batch_upload(collection_name, formatted_data, db)
+            except Exception as e:
+                print(f"Hata: {json_file} - {str(e)}")
+                continue
+        
+        print("\n2. TL mevduat verileri yükleniyor...")
+        upload_mevduat_tl_data()
+        
+        print("\n3. Döviz mevduat verileri yükleniyor...")
+        upload_mevduat_foreign_data()
+        
+    except Exception as e:
+        print(f"Ana fonksiyon hatası: {str(e)}")
     
     print("\nTüm veri yükleme işlemleri tamamlandı.")
 

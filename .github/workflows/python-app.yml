@@ -42,7 +42,7 @@ jobs:
     - name: Run bots
       run: |
         cd Bots
-        for bot in ihtiyac_kredisi_bot.py kobi_bot.py konut_kredisi_bot.py tasit_kredisi_bot.py mevduat_bot.py; do
+        for bot in ihtiyac_kredisi_bot.py kobi_bot.py konut_kredisi_bot.py mevduat_bot.py; do
           python -u $bot || true
           echo "Completed running $bot"
           ls -la ../Data/
