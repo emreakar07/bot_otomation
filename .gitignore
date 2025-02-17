@@ -31,7 +31,8 @@ ENV/
 *.swo
 
 # Project specific
-Data/
+Data/*
+!Data/.gitkeep
 *.json
 !package.json
 !package-lock.json

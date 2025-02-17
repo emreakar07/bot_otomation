@@ -1,21 +1,29 @@
-name: Python application
+name: Bot Automation
 
 on:
+  schedule:
+    - cron: '0 0 * * 0'  # Her Pazar günü saat 00:00'da
+  workflow_dispatch:  # Manuel tetikleme
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  workflow_dispatch:
 
 jobs:
-  build:
+  run-bots:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@v4
     
-    - name: Create Data directory
-      run: mkdir -p Data
+    - name: Setup Data directory
+      run: |
+        if [ ! -d "Data" ]; then
+          mkdir Data
+        fi
+        echo "Data directory contents:"
+        ls -la Data/
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -40,30 +48,40 @@ jobs:
         echo "${{ secrets.MEVDUAT2_SERVICE_ACCOUNT }}" > mevduat2serviceAccountKey.json
 
     - name: Run bots
+      continue-on-error: true
       run: |
         cd Bots
         for bot in ihtiyac_kredisi_bot.py kobi_bot.py konut_kredisi_bot.py mevduat_bot.py; do
-          python -u $bot || true
+          echo "Running $bot..."
+          timeout 20m python -u $bot || echo "Warning: $bot timed out or failed"
           echo "Completed running $bot"
+          echo "Current Data directory contents:"
           ls -la ../Data/
+          echo "----------------------------------------"
         done
         cd ..
 
     - name: Process data
       if: always()
+      continue-on-error: true
       run: |
-        python split_mevduat.py || true
-        python db_setup.py || true
+        echo "Running split_mevduat.py..."
+        python split_mevduat.py || echo "Warning: split_mevduat.py failed"
+        echo "Running db_setup.py..."
+        python db_setup.py || echo "Warning: db_setup.py failed"
+        echo "Data processing completed"
+        echo "Final Data directory contents:"
+        ls -la Data/
 
-    - name: Upload artifact
+    - name: Upload artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: scraped-data
+        name: bot-data-${{ github.run_number }}
         path: Data/
         retention-days: 7
 
-    - name: Cleanup
+    - name: Cleanup sensitive files
       if: always()
       run: |
         rm -f serviceAccountKey.json
