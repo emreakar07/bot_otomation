@@ -19,10 +19,11 @@ jobs:
     
     - name: Setup Data directory
       run: |
-        if [ ! -d "Data" ]; then
-          mkdir Data
-        fi
-        echo "Data directory contents:"
+        mkdir -p Data
+        chmod 777 Data
+        echo "Working directory: $(pwd)"
+        echo "Data directory path: $(pwd)/Data"
+        echo "Initial Data directory contents:"
         ls -la Data/
 
     - name: Setup Python
@@ -50,14 +51,19 @@ jobs:
     - name: Run bots
       continue-on-error: true
       run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        echo "Current PYTHONPATH: $PYTHONPATH"
+        echo "Working directory before running bots: $(pwd)"
+        
         cd Bots
         for bot in ihtiyac_kredisi_bot.py kobi_bot.py konut_kredisi_bot.py mevduat_bot.py; do
-          echo "Running $bot..."
-          timeout 20m python -u $bot || echo "Warning: $bot timed out or failed"
-          echo "Completed running $bot"
-          echo "Current Data directory contents:"
-          ls -la ../Data/
           echo "----------------------------------------"
+          echo "Running $bot..."
+          echo "Bot working directory: $(pwd)"
+          python -u $bot || echo "Warning: $bot failed"
+          echo "Completed running $bot"
+          echo "Data directory contents after $bot:"
+          ls -la ../Data/
         done
         cd ..
 
@@ -65,20 +71,40 @@ jobs:
       if: always()
       continue-on-error: true
       run: |
+        echo "Working directory: $(pwd)"
+        echo "Data directory contents before processing:"
+        ls -la Data/
+        
         echo "Running split_mevduat.py..."
         python split_mevduat.py || echo "Warning: split_mevduat.py failed"
+        
+        echo "Data directory contents after split:"
+        ls -la Data/
+        
         echo "Running db_setup.py..."
         python db_setup.py || echo "Warning: db_setup.py failed"
-        echo "Data processing completed"
+        
         echo "Final Data directory contents:"
         ls -la Data/
+
+    - name: Debug file permissions
+      if: always()
+      run: |
+        echo "Data directory permissions:"
+        ls -la Data/
+        echo "Current user and groups:"
+        id
+        echo "Current working directory:"
+        pwd
 
     - name: Upload artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: bot-data-${{ github.run_number }}
-        path: Data/
+        path: |
+          Data/
+          !Data/.gitkeep
         retention-days: 7
 
     - name: Cleanup sensitive files
